@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, FlatList, Switch, TouchableOpacity, Platform } 
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Notifications from "expo-notifications";
 
-// Configure Notification Channel for Android
 const createNotificationChannel = async () => {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
@@ -11,12 +10,11 @@ const createNotificationChannel = async () => {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
-      sound: 'alarm-sound.mp3', // Ensure the sound attribute is set
+      sound: 'alarm-sound.mp3',
     });
   }
 };
 
-// Request permissions for notifications
 const requestPermissions = async () => {
   if (Platform.OS === 'android') {
     await createNotificationChannel();
@@ -29,10 +27,15 @@ const requestPermissions = async () => {
 
 const Alarmcompo = () => {
   const [alarms, setAlarms] = useState([
-    { id: '1', time: '05:00', repeat: 'ครั้งเดียว', enabled: false },
-    { id: '2', time: '06:00', repeat: 'ทุกวัน', enabled: false },
-    { id: '3', time: '07:00', repeat: 'เสาร์ถึงอาทิตย์', enabled: false },
-    { id: '4', time: '08:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false },
+    { id: '1', time: '05:00', repeat: 'ครั้งเดียว', enabled: false, notificationId: null },
+    { id: '2', time: '06:00', repeat: 'ทุกวัน', enabled: false, notificationId: null },
+    { id: '3', time: '07:00', repeat: 'เสาร์ถึงอาทิตย์', enabled: false, notificationId: null },
+    { id: '4', time: '08:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
+    { id: '5', time: '09:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
+    { id: '6', time: '10:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
+    { id: '7', time: '11:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
+    { id: '8', time: '12:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
+    { id: '9', time: '13:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
   ]);
 
   const [selectedAlarm, setSelectedAlarm] = useState(null);
@@ -43,18 +46,30 @@ const Alarmcompo = () => {
   }, []);
 
   const handleToggleSwitch = async (id) => {
-    setAlarms((prevAlarms) =>
-      prevAlarms.map((alarm) =>
-        alarm.id === id ? { ...alarm, enabled: !alarm.enabled } : alarm
-      )
-    );
-
-    const toggledAlarm = alarms.find((alarm) => alarm.id === id);
-    if (!toggledAlarm.enabled) {
-      await scheduleNotification(toggledAlarm);
-    } else {
-      await cancelNotification(toggledAlarm.id);
-    }
+    const updatedAlarms = alarms.map(async (alarm) => {
+      if (alarm.id === id) {
+        if (alarm.enabled) {
+          try {
+            if (alarm.notificationId) {
+              await Notifications.cancelScheduledNotificationAsync(alarm.notificationId);
+            }
+          } catch (error) {
+            console.error("Error canceling notification:", error);
+          }
+          return { ...alarm, enabled: false, notificationId: null };
+        } else {
+          try {
+            const notificationId = await scheduleNotification(alarm);
+            return { ...alarm, enabled: true, notificationId };
+          } catch (error) {
+            console.error("Error scheduling notification:", error);
+            return alarm; // Return the original alarm if there's an error
+          }
+        }
+      }
+      return alarm;
+    });
+    setAlarms(await Promise.all(updatedAlarms));
   };
 
   const handlePressTime = (alarm) => {
@@ -63,54 +78,58 @@ const Alarmcompo = () => {
   };
 
   const handleDateChange = (event, selectedDate) => {
-    const currentTime = selectedDate || new Date();
-    const hours = currentTime.getHours().toString().padStart(2, '0');
-    const minutes = currentTime.getMinutes().toString().padStart(2, '0');
-    const newTime = `${hours}:${minutes}`;
+    if (event.type === 'set') {
+      const currentTime = selectedDate || new Date();
+      const hours = currentTime.getHours().toString().padStart(2, '0');
+      const minutes = currentTime.getMinutes().toString().padStart(2, '0');
+      const newTime = `${hours}:${minutes}`;
 
-    if (selectedAlarm) {
-      setAlarms((prevAlarms) =>
-        prevAlarms.map((alarm) =>
-          alarm.id === selectedAlarm.id ? { ...alarm, time: newTime } : alarm
-        )
-      );
-      setSelectedAlarm(null);
+      if (selectedAlarm) {
+        setAlarms((prevAlarms) =>
+          prevAlarms.map((alarm) =>
+            alarm.id === selectedAlarm.id ? { ...alarm, time: newTime } : alarm
+          )
+        );
+        setSelectedAlarm(null);
+      }
+
+      setPickerVisible(false);
+    } else if (event.type === 'dismissed') {
+      setPickerVisible(false);
     }
-
-    setPickerVisible(false);
   };
 
   const scheduleNotification = async (alarm) => {
-    const [hours, minutes] = alarm.time.split(':').map(Number);
-    const now = new Date();
-    const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+    try {
+      const [hours, minutes] = alarm.time.split(':').map(Number);
+      const now = new Date();
+      const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
 
-    if (alarmDate < now) {
-      alarmDate.setDate(alarmDate.getDate() + 1); // Schedule for the next day if the time has already passed today
+      if (alarmDate < now) {
+        alarmDate.setDate(alarmDate.getDate() + 1); // Schedule for the next day if the time has already passed today
+      }
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Alarm",
+          body: `It's ${alarm.time}!`,
+          priority: Notifications.AndroidNotificationPriority.MAX,  // For Android
+          presentation: 'banner',  // For iOS to show the notification as a banner
+        },
+        trigger: {
+          date: alarmDate,
+          channelId: 'default',
+        },
+      });
+
+      return notificationId;
+    } catch (error) {
+      console.error("Error scheduling notification:", error);
     }
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Alarm",
-        body: `It's ${alarm.time}!`,
-        sound: 'alarm-sound.mp3', // Ensure the sound attribute is set
-      },
-      trigger: {
-        date: alarmDate,
-        channelId: 'default',
-      },
-    });
-  };
-
-  const cancelNotification = async (id) => {
-    // You need to track and cancel specific notifications
-    // This is a placeholder as there is no direct method to cancel by ID in expo-notifications
-    await Notifications.cancelAllScheduledNotificationsAsync();
   };
 
   return (
     <View style={styles.container}>
-      {/* <Text style={styles.header}>Alarm Settings</Text> */}
       <FlatList
         data={alarms}
         keyExtractor={(item) => item.id}
@@ -145,25 +164,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     padding: 20,
   },
-  header: {
-    fontSize: 30,
-    color: "#FFF",
-    marginBottom: 20,
-  },
   alarmItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 10,
+    padding: 30,
     borderBottomWidth: 1,
     borderBottomColor: "#555",
   },
   alarmTime: {
-    fontSize: 24,
+    fontSize: 50,
     color: "#FFF",
   },
   alarmRepeat: {
-    fontSize: 16,
+    fontSize: 20,
     color: "#AAA",
   },
 });

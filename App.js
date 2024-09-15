@@ -4,8 +4,10 @@ import RealTimeClock from "./screens/RealTimeClock";
 import Stopwatch from "./screens/Stopwatch";
 import Alarm from "./screens/Alarm";
 import CountdownTimer from "./screens/CountdownTimer";
-import CalendarScreen from "./screens/CalendarScreen";
-import Zodiact from "./screens/Zodiact";
+import WorldClockScreen from "./screens/WorldClockScreen";
+import BottomTab from "./navigations/BottomTab";
+import { NavigationContainer } from "@react-navigation/native";
+import RootStack from "./navigations/RootStack";
 
 export default function App() {
   return (
@@ -13,7 +15,12 @@ export default function App() {
     // <Stopwatch />
     // <Alarm />
     // <CountdownTimer/>
-    // <CalendarScreen />
-    <Zodiact />
+    // <WorldClockScreen />
+    // <NavigationContainer>
+    //         <BottomTab />
+    // </NavigationContainer>
+    <NavigationContainer>
+     <RootStack />
+    </NavigationContainer>
   );
 }
