@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, FlatList, Switch, TouchableOpacity, Platform } from "react-native";
+import { View, Text, StyleSheet, FlatList, Switch, TouchableOpacity, Modal, Button, Platform } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Notifications from "expo-notifications";
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAlarms } from '../components/AlarmContext';
+import { Picker } from '@react-native-picker/picker';
 
 const createNotificationChannel = async () => {
   if (Platform.OS === 'android') {
@@ -26,105 +30,75 @@ const requestPermissions = async () => {
 };
 
 const Alarmcompo = () => {
-  const [alarms, setAlarms] = useState([
-    { id: '1', time: '05:00', repeat: 'ครั้งเดียว', enabled: false, notificationId: null },
-    { id: '2', time: '06:00', repeat: 'ทุกวัน', enabled: false, notificationId: null },
-    { id: '3', time: '07:00', repeat: 'เสาร์ถึงอาทิตย์', enabled: false, notificationId: null },
-    { id: '4', time: '08:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
-    { id: '5', time: '09:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
-    { id: '6', time: '10:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
-    { id: '7', time: '11:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
-    { id: '8', time: '12:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
-    { id: '9', time: '13:00', repeat: 'วันจันทร์ถึงวันศุกร์', enabled: false, notificationId: null },
-  ]);
-
+  const { alarms, removeAlarm, updateAlarm } = useAlarms();
   const [selectedAlarm, setSelectedAlarm] = useState(null);
   const [isPickerVisible, setPickerVisible] = useState(false);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [newTime, setNewTime] = useState(new Date());
+  const [newRepeat, setNewRepeat] = useState('ครั้งเดียว');
+  const navigation = useNavigation();
 
   useEffect(() => {
     requestPermissions();
   }, []);
 
-  const handleToggleSwitch = async (id) => {
-    const updatedAlarms = alarms.map(async (alarm) => {
-      if (alarm.id === id) {
-        if (alarm.enabled) {
-          try {
-            if (alarm.notificationId) {
-              await Notifications.cancelScheduledNotificationAsync(alarm.notificationId);
-            }
-          } catch (error) {
-            console.error("Error canceling notification:", error);
-          }
-          return { ...alarm, enabled: false, notificationId: null };
-        } else {
-          try {
-            const notificationId = await scheduleNotification(alarm);
-            return { ...alarm, enabled: true, notificationId };
-          } catch (error) {
-            console.error("Error scheduling notification:", error);
-            return alarm; // Return the original alarm if there's an error
-          }
-        }
-      }
-      return alarm;
-    });
-    setAlarms(await Promise.all(updatedAlarms));
+  const handleAddAlarm = () => {
+    navigation.navigate('AddAlarmScreen');
   };
 
-  const handlePressTime = (alarm) => {
+  const handleDeleteAlarm = (id) => {
+    removeAlarm(id);
+  };
+
+  const handleEditAlarm = (alarm) => {
+    const [hours, minutes] = alarm.time.split(':').map(Number);
     setSelectedAlarm(alarm);
-    setPickerVisible(true);
+    setNewTime(new Date(1970, 0, 1, hours, minutes)); // ตั้งค่าเริ่มต้นใหม่ให้ถูกต้อง
+    setNewRepeat(alarm.repeat);
+    setModalVisible(true);
   };
 
-  const handleDateChange = (event, selectedDate) => {
-    if (event.type === 'set') {
-      const currentTime = selectedDate || new Date();
-      const hours = currentTime.getHours().toString().padStart(2, '0');
-      const minutes = currentTime.getMinutes().toString().padStart(2, '0');
-      const newTime = `${hours}:${minutes}`;
-
-      if (selectedAlarm) {
-        setAlarms((prevAlarms) =>
-          prevAlarms.map((alarm) =>
-            alarm.id === selectedAlarm.id ? { ...alarm, time: newTime } : alarm
-          )
-        );
-        setSelectedAlarm(null);
-      }
-
-      setPickerVisible(false);
-    } else if (event.type === 'dismissed') {
-      setPickerVisible(false);
+  const handleToggleSwitch = async (id) => {
+    const alarm = alarms.find(alarm => alarm.id === id);
+    if (alarm) {
+      const updatedAlarm = alarm.enabled
+        ? { ...alarm, enabled: false, notificationId: null }
+        : { ...alarm, enabled: true, notificationId: await scheduleNotification(alarm) };
+      updateAlarm(updatedAlarm);
     }
   };
 
   const scheduleNotification = async (alarm) => {
-    try {
-      const [hours, minutes] = alarm.time.split(':').map(Number);
-      const now = new Date();
-      const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+    const [hours, minutes] = alarm.time.split(':').map(Number);
+    const now = new Date();
+    const alarmDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
 
-      if (alarmDate < now) {
-        alarmDate.setDate(alarmDate.getDate() + 1); // Schedule for the next day if the time has already passed today
-      }
+    if (alarmDate < now) {
+      alarmDate.setDate(alarmDate.getDate() + 1);
+    }
 
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Alarm",
-          body: `It's ${alarm.time}!`,
-          priority: Notifications.AndroidNotificationPriority.MAX,  // For Android
-          presentation: 'banner',  // For iOS to show the notification as a banner
-        },
-        trigger: {
-          date: alarmDate,
-          channelId: 'default',
-        },
-      });
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Alarm",
+        body: `It's ${alarm.time}!`,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        presentation: 'banner',
+      },
+      trigger: { date: alarmDate, channelId: 'default' },
+    });
 
-      return notificationId;
-    } catch (error) {
-      console.error("Error scheduling notification:", error);
+    return notificationId;
+  };
+
+  const handleSaveChanges = () => {
+    if (selectedAlarm) {
+      const updatedAlarm = {
+        ...selectedAlarm,
+        time: `${newTime.getHours().toString().padStart(2, '0')}:${newTime.getMinutes().toString().padStart(2, '0')}`,
+        repeat: newRepeat,
+      };
+      updateAlarm(updatedAlarm);
+      setModalVisible(false);
     }
   };
 
@@ -135,7 +109,7 @@ const Alarmcompo = () => {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.alarmItem}>
-            <TouchableOpacity onPress={() => handlePressTime(item)}>
+            <TouchableOpacity onPress={() => handleEditAlarm(item)}>
               <Text style={styles.alarmTime}>{item.time}</Text>
             </TouchableOpacity>
             <Text style={styles.alarmRepeat}>{item.repeat}</Text>
@@ -143,17 +117,64 @@ const Alarmcompo = () => {
               value={item.enabled}
               onValueChange={() => handleToggleSwitch(item.id)}
             />
+            <TouchableOpacity onPress={() => handleDeleteAlarm(item.id)}>
+              <Ionicons name="trash-outline" size={24} color="white" />
+            </TouchableOpacity>
           </View>
         )}
       />
-      {isPickerVisible && (
-        <DateTimePicker
-          value={new Date()}
-          mode="time"
-          display="default"
-          onChange={handleDateChange}
-        />
-      )}
+      <TouchableOpacity style={styles.addButton} onPress={handleAddAlarm}>
+        <Ionicons name="add" size={36} color="white" />
+      </TouchableOpacity>
+
+      {/* Modal for editing alarm */}
+      <Modal
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Alarm</Text>
+            <Text style={styles.label}>Set Time:</Text>
+            <TouchableOpacity onPress={() => setPickerVisible(true)}>
+              <Text style={styles.timeText}>
+                {newTime.getHours().toString().padStart(2, '0')}:
+                {newTime.getMinutes().toString().padStart(2, '0')}
+              </Text>
+            </TouchableOpacity>
+
+            {isPickerVisible && (
+              <DateTimePicker
+                value={newTime}
+                mode="time"
+                display="default"
+                onChange={(event, selectedDate) => {
+                  setPickerVisible(false);
+                  if (selectedDate) {
+                    setNewTime(selectedDate);
+                  }
+                }}
+              />
+            )}
+
+            <Text style={styles.label}>Repeat:</Text>
+            <Picker
+              selectedValue={newRepeat}
+              onValueChange={(itemValue) => setNewRepeat(itemValue)}
+              style={styles.picker}
+            >
+              <Picker.Item label="ครั้งเดียว" value="ครั้งเดียว" />
+              <Picker.Item label="ทุกวัน" value="ทุกวัน" />
+              <Picker.Item label="จันทร์ถึงศุกร์" value="จันทร์ถึงศุกร์" />
+              <Picker.Item label="เสาร์ถึงอาทิตย์" value="เสาร์ถึงอาทิตย์" />
+            </Picker>
+
+            <Button title="Save" onPress={handleSaveChanges} />
+            <Button title="Cancel" onPress={() => setModalVisible(false)} />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -168,7 +189,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 30,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#555",
   },
@@ -179,6 +200,48 @@ const styles = StyleSheet.create({
   alarmRepeat: {
     fontSize: 20,
     color: "#AAA",
+  },
+  addButton: {
+    backgroundColor: "#1E90FF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 50,
+    width: 60,
+    height: 60,
+    position: "absolute",
+    bottom: 30,
+    right: 30,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  label: {
+    fontSize: 18,
+    marginVertical: 10,
+  },
+  timeText: {
+    fontSize: 48,
+    color: "#000",
+    textAlign: "center",
+    marginVertical: 20,
+  },
+  picker: {
+    height: 50,
+    width: "100%",
   },
 });
 
