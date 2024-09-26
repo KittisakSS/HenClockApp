@@ -27,7 +27,7 @@ const AddAlarmScreen = ({ navigation }) => {
     const newAlarm = {
       id: Math.random().toString(),
       time: `${hours}:${minutes}`,
-      repeat,
+      repeat,  // บันทึกค่าของ repeat ลงไปในข้อมูลนาฬิกาปลุก
       enabled: true,
       notificationId: null,
     };

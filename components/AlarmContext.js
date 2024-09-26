@@ -1,22 +1,38 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { saveAlarmsToStorage, loadAlarmsFromStorage } from '../storage/AlarmStorage';
 
 const AlarmContext = createContext();
 
 export const AlarmProvider = ({ children }) => {
   const [alarms, setAlarms] = useState([]);
 
-  const addAlarm = (alarm) => {
-    setAlarms((prevAlarms) => [...prevAlarms, alarm]);
+  useEffect(() => {
+    const loadAlarms = async () => {
+      const storedAlarms = await loadAlarmsFromStorage();
+      setAlarms(storedAlarms);
+    };
+
+    loadAlarms();
+  }, []);
+
+  const addAlarm = async (alarm) => {
+    const updatedAlarms = [...alarms, alarm];
+    setAlarms(updatedAlarms);
+    await saveAlarmsToStorage(updatedAlarms);
   };
 
-  const removeAlarm = (id) => {
-    setAlarms((prevAlarms) => prevAlarms.filter(alarm => alarm.id !== id));
+  const removeAlarm = async (id) => {
+    const updatedAlarms = alarms.filter(alarm => alarm.id !== id);
+    setAlarms(updatedAlarms);
+    await saveAlarmsToStorage(updatedAlarms);
   };
 
-  const updateAlarm = (updatedAlarm) => {
-    setAlarms((prevAlarms) =>
-      prevAlarms.map((alarm) => (alarm.id === updatedAlarm.id ? updatedAlarm : alarm))
+  const updateAlarm = async (updatedAlarm) => {
+    const updatedAlarms = alarms.map(alarm => 
+      alarm.id === updatedAlarm.id ? updatedAlarm : alarm
     );
+    setAlarms(updatedAlarms);
+    await saveAlarmsToStorage(updatedAlarms);
   };
 
   return (
